@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>互動式數位拼圖遊戲 v2.0</title>
+    <style>
+        /* * 1. 視覺樣式設計 (CSS) 
+         * 配色：主色 #FF9F1C (亮橘), 輔助色 #2EC4B6 (藍綠), AI色 #7B2CBF (紫色)
+         */
+        :root {
+            --primary-color: #FF9F1C;
+            --secondary-color: #2EC4B6;
+            --ai-color: #7B2CBF;
+            --ai-light: #E0AAFF;
+            --bg-color: #ffffff;
+            --text-color: #333;
+            --gap-size: 2px;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding-bottom: 50px;
+        }
+
+        /* 全頁背景圖浮水印 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('https://raw.githubusercontent.com/mathruffian-dot/teaching-assets/refs/heads/main/image.avif');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.5;
+            z-index: -1;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px 10px;
+            background: rgba(255, 255, 255, 0.95);
+            width: 100%;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 10;
+        }
+
+        h1 {
+            margin: 0;
+            color: var(--primary-color);
+            text-shadow: 1px 1px 0px #333;
+            font-size: 1.8rem;
+        }
+
+        .subtitle {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* * 使用者介面 (UI) 
+         */
+        .controls-wrapper {
+            max-width: 600px;
+            width: 95%;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: rgba(255,255,255,0.9);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .ai-panel {
+            border: 2px solid var(--ai-light);
+            background: linear-gradient(to right bottom, #fff, #f8f0ff);
+        }
+
+        .panel-title {
+            width: 100%;
+            text-align: center;
+            font-size: 0.9rem;
+            color: #888;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .ai-panel .panel-title {
+            color: var(--ai-color);
+        }
+
+        select, button, label, input[type="text"] {
+            padding: 10px 15px;
+            border-radius: 25px;
+            border: 2px solid var(--secondary-color);
+            background: white;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            outline: none;
+        }
+
+        input[type="text"] {
+            flex-grow: 1;
+            min-width: 200px;
+            border-color: var(--ai-color);
+            cursor: text;
+            user-select: text; /* 允許輸入文字選取 */
+            -webkit-user-select: text;
+        }
+        
+        input[type="text"]:focus {
+            box-shadow: 0 0 0 3px rgba(123, 44, 191, 0.2);
+        }
+
+        select:focus, button:focus {
+            box-shadow: 0 0 0 3px rgba(46, 196, 182, 0.3);
+        }
+
+        button.primary {
+            background-color: var(--secondary-color);
+            color: white;
+            font-weight: bold;
+        }
+        
+        button.ai-btn {
+            background-color: var(--ai-color);
+            border-color: var(--ai-color);
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        button.ai-btn:hover {
+            background-color: #5a189a;
+            box-shadow: 0 4px 12px rgba(123, 44, 191, 0.3);
+        }
+
+        button.coach-btn {
+            background-color: white;
+            color: var(--ai-color);
+            border-color: var(--ai-color);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 自訂上傳按鈕美化 */
+        input[type="file"] {
+            display: none;
+        }
+        .file-upload-label {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+            display: inline-flex;
+            align-items: center;
+            font-weight: bold;
+        }
+        .file-upload-label:hover {
+            opacity: 0.9;
+        }
+
+        /* * 拼圖遊戲區域 
+         */
+        #game-container {
+            width: 100%;
+            max-width: 600px; /* RWD 最大寬度 */
+            padding: 10px;
+            position: relative;
+        }
+
+        #puzzle-board {
+            width: 100%;
+            /* 高度由 JS 動態設定以維持比例 */
+            background-color: rgba(0,0,0,0.1);
+            border: 4px solid var(--primary-color);
+            border-radius: 8px;
+            display: grid;
+            grid-gap: var(--gap-size);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: opacity 0.3s;
+        }
+        
+        #puzzle-board.loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        /* 單個拼圖塊 */
+        .puzzle-piece {
+            background-repeat: no-repeat;
+            cursor: grab;
+            position: relative;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-radius: 2px;
+        }
+
+        .puzzle-piece.selected {
+            z-index: 10;
+            box-shadow: 0 0 0 4px var(--primary-color), 0 0 15px rgba(255, 159, 28, 0.6);
+            transform: scale(1.02);
+            border: 1px solid white;
+        }
+
+        .puzzle-piece.correct-flash {
+            animation: flash 0.5s;
+        }
+
+        @keyframes flash {
+            0% { filter: brightness(1); }
+            50% { filter: brightness(1.5); }
+            100% { filter: brightness(1); }
+        }
+
+        /* 偷看原圖的覆蓋層 */
+        #reference-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: white;
+            z-index: 20;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            border-radius: 4px;
+        }
+
+        #reference-image.show {
+            opacity: 1;
+        }
+        
+        /* 載入中指示器 */
+        #loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255,255,255,0.8);
+            z-index: 30;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: var(--ai-color);
+            font-weight: bold;
+            border-radius: 8px;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--ai-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* * Modal 彈出視窗 
+         */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+            border-top: 10px solid var(--secondary-color);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+        }
+        
+        .modal-content.ai-style {
+            border-top-color: var(--ai-color);
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0.5); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal h2 {
+            color: var(--secondary-color);
+            margin-top: 0;
+        }
+        
+        .modal-content.ai-style h2 {
+            color: var(--ai-color);
+        }
+
+        .modal p {
+            font-size: 1.1rem;
+            color: #555;
+            margin: 20px 0;
+            line-height: 1.5;
+            white-space: pre-wrap; /* 保留 AI 回應的換行 */
+        }
+        
+        .close-modal {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #aaa;
+        }
+        .close-modal:hover { color: #333; }
+
+        /* 手機版提示 */
+        .mobile-tip {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 5px;
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .mobile-tip { display: block; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🧩 互動式數位拼圖</h1>
+        <div class="subtitle">Gemini AI 賦能特別版 ✨</div>
+        <div class="mobile-tip">💡 手機版：點擊兩張圖片即可交換位置</div>
+    </header>
+
+    <div class="controls-wrapper">
+        
+        <!-- AI 創意工坊區塊 -->
+        <div class="panel ai-panel">
+            <div class="panel-title">✨ AI 創意工坊：描述你想拼的圖片</div>
+            <input type="text" id="aiPromptInput" placeholder="例如：賽博龐克風格的貓咪在吃拉麵...">
+            <button id="aiGenBtn" class="ai-btn">
+                <span>🎨 生成拼圖</span>
+            </button>
+        </div>
+
+        <!-- 一般控制區塊 -->
+        <div class="panel">
+            <div class="panel-title">一般設定</div>
+            <!-- 關卡選擇器 -->
+            <select id="levelSelect">
+                <option value="https://i.ibb.co/cXX0gR0M/edited-image.png">關卡 1 (預設)</option>
+                <option value="https://raw.githubusercontent.com/mathruffian-dot/teaching-assets/refs/heads/main/%E8%9E%A2%E5%B9%95%E6%93%B7%E5%8F%96%E7%95%AB%E9%9D%A2%202025-12-10%20103628.png">關卡 2 (教學)</option>
+                <option value="https://ibb.co/kgpptz9b">關卡 3 (預設)</option>
+            </select>
+
+            <!-- 自訂圖片上傳 -->
+            <label for="uploadInput" class="file-upload-label">
+                📷 上傳圖片
+            </label>
+            <input type="file" id="uploadInput" accept="image/*">
+
+            <!-- 功能按鈕 -->
+            <button id="resetBtn" class="primary">🔄 重新開始</button>
+            <button id="peekBtn">👁️ 偷看</button>
+            
+            <!-- AI 教練按鈕 -->
+            <button id="aiCoachBtn" class="coach-btn">🤖 AI 提示與鼓勵</button>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <!-- 拼圖區域 -->
+        <div id="puzzle-board"></div>
+        <!-- 參考原圖 (偷看用) -->
+        <img id="reference-image" src="" alt="Reference">
+        
+        <!-- 載入遮罩 -->
+        <div id="loading-overlay">
+            <div class="spinner"></div>
+            <div id="loading-text">AI 正在施展魔法...</div>
+        </div>
+    </div>
+
+    <!-- 通用 Modal (勝利/AI訊息) -->
+    <div id="infoModal" class="modal">
+        <div class="modal-content" id="modalContentBox">
+            <span class="close-modal" id="modalCloseX">&times;</span>
+            <h2 id="modalTitle">🎉 標題</h2>
+            <p id="modalText">訊息內容...</p>
+            <button id="modalActionBtn" class="primary">確定</button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * API 設定與核心邏輯
+         */
+        const apiKey = ""; // 系統會自動填入 API Key
+
+        // 狀態變數
+        const state = {
+            currentImageUrl: '',
+            rows: 3,
+            cols: 4,
+            pieces: [], // 儲存目前的拼圖排列
+            selectedPieceIndex: null, // 用於點擊交換模式
+            isDragging: false,
+            isLoading: false
+        };
+
+        // DOM 元素
+        const elements = {
+            board: document.getElementById('puzzle-board'),
+            levelSelect: document.getElementById('levelSelect'),
+            uploadInput: document.getElementById('uploadInput'),
+            resetBtn: document.getElementById('resetBtn'),
+            peekBtn: document.getElementById('peekBtn'),
+            refImage: document.getElementById('reference-image'),
+            
+            // AI 相關元素
+            aiPromptInput: document.getElementById('aiPromptInput'),
+            aiGenBtn: document.getElementById('aiGenBtn'),
+            aiCoachBtn: document.getElementById('aiCoachBtn'),
+            loadingOverlay: document.getElementById('loading-overlay'),
+            loadingText: document.getElementById('loading-text'),
+
+            // Modal 相關
+            infoModal: document.getElementById('infoModal'),
+            modalContentBox: document.getElementById('modalContentBox'),
+            modalTitle: document.getElementById('modalTitle'),
+            modalText: document.getElementById('modalText'),
+            modalActionBtn: document.getElementById('modalActionBtn'),
+            modalCloseX: document.getElementById('modalCloseX')
+        };
+
+        // 初始化
+        window.addEventListener('DOMContentLoaded', () => {
+            loadLevel(elements.levelSelect.value);
+            setupEventListeners();
+        });
+
+        // 設定事件監聽器
+        function setupEventListeners() {
+            // 關卡與上傳
+            elements.levelSelect.addEventListener('change', (e) => loadLevel(e.target.value));
+            elements.uploadInput.addEventListener('change', handleImageUpload);
+            
+            // 遊戲控制
+            elements.resetBtn.addEventListener('click', () => {
+                shufflePieces();
+                renderBoard();
+            });
+
+            // AI 功能監聽
+            elements.aiGenBtn.addEventListener('click', handleAIGenerate);
+            elements.aiCoachBtn.addEventListener('click', handleAICoach);
+
+            // 偷看功能
+            const showPeek = () => elements.refImage.classList.add('show');
+            const hidePeek = () => elements.refImage.classList.remove('show');
+            elements.peekBtn.addEventListener('mousedown', showPeek);
+            elements.peekBtn.addEventListener('mouseup', hidePeek);
+            elements.peekBtn.addEventListener('mouseleave', hidePeek);
+            elements.peekBtn.addEventListener('touchstart', (e) => { e.preventDefault(); showPeek(); });
+            elements.peekBtn.addEventListener('touchend', (e) => { e.preventDefault(); hidePeek(); });
+
+            // Modal 控制
+            const closeModal = () => elements.infoModal.style.display = 'none';
+            elements.modalActionBtn.addEventListener('click', () => {
+                closeModal();
+                if (elements.modalActionBtn.dataset.action === 'restart') {
+                    shufflePieces();
+                    renderBoard();
+                }
+            });
+            elements.modalCloseX.addEventListener('click', closeModal);
+            elements.infoModal.addEventListener('click', (e) => {
+                if (e.target === elements.infoModal) closeModal();
+            });
+        }
+
+        // --- AI 功能實作 ---
+
+        // 1. AI 圖片生成 (Imagen)
+        async function handleAIGenerate() {
+            const prompt = elements.aiPromptInput.value.trim();
+            if (!prompt) {
+                showModal('提示', '請先輸入圖片描述喔！', false, true);
+                return;
+            }
+
+            setLoading(true, "AI 畫家中...");
+
+            try {
+                // 建構 API 請求
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`;
+                const payload = {
+                    instances: [{ prompt: prompt }],
+                    parameters: { sampleCount: 1 }
+                };
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error('生成失敗，請稍後再試。');
+
+                const data = await response.json();
+                
+                if (data.predictions && data.predictions[0] && data.predictions[0].bytesBase64Encoded) {
+                    const base64Image = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+                    loadLevel(base64Image);
+                    elements.levelSelect.value = ""; // 清除選單選取狀態
+                    elements.aiPromptInput.value = ""; // 清空輸入框
+                } else {
+                    throw new Error('無法解析圖片資料');
+                }
+
+            } catch (error) {
+                console.error(error);
+                showModal('哎呀！', 'AI 生成圖片時發生了一點問題，請檢查網路或稍後再試。', false, true);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // 2. AI 教練提示 (Gemini Text)
+        async function handleAICoach() {
+            setLoading(true, "AI 思考中...");
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                
+                // 根據當前是否完成或剛開始，給予不同提示
+                const userPrompt = "請扮演一位活潑有趣的拼圖教練。請給正在玩拼圖遊戲的玩家一句簡短的鼓勵，或是提供一個通用的拼圖策略（例如：先把邊框找出來、依照顏色分類等）。請不要超過50個字，用繁體中文回答。";
+
+                const payload = {
+                    contents: [{ parts: [{ text: userPrompt }] }]
+                };
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "加油！再試試看！";
+
+                showModal('🤖 AI 教練說...', aiText, false, true);
+
+            } catch (error) {
+                showModal('系統提示', 'AI 教練暫時去休息了，請靠自己的力量加油！', false, true);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // --- 核心遊戲邏輯 ---
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    loadLevel(event.target.result);
+                    elements.levelSelect.value = ""; 
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function loadLevel(imageUrl) {
+            if(!imageUrl) return;
+            state.currentImageUrl = imageUrl;
+            elements.refImage.src = imageUrl;
+
+            const img = new Image();
+            img.onload = () => {
+                calculateGrid(img.naturalWidth, img.naturalHeight);
+                createPieces();
+                shufflePieces();
+                renderBoard();
+            };
+            img.onerror = () => {
+                showModal("錯誤", "無法載入圖片，請試試別張。", false, true);
+            };
+            img.src = imageUrl;
+        }
+
+        function calculateGrid(width, height) {
+            const aspectRatio = width / height;
+            const targetTotal = 16; 
+            let cols = Math.round(Math.sqrt(targetTotal * aspectRatio));
+            let rows = Math.round(targetTotal / cols);
+            state.cols = Math.max(2, cols);
+            state.rows = Math.max(2, rows);
+
+            elements.board.style.aspectRatio = `${width}/${height}`;
+            elements.board.style.gridTemplateColumns = `repeat(${state.cols}, 1fr)`;
+            elements.board.style.gridTemplateRows = `repeat(${state.rows}, 1fr)`;
+        }
+
+        function createPieces() {
+            state.pieces = [];
+            const total = state.rows * state.cols;
+            for (let i = 0; i < total; i++) {
+                state.pieces.push({ correctPos: i, id: i });
+            }
+        }
+
+        function shufflePieces() {
+            for (let i = state.pieces.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [state.pieces[i], state.pieces[j]] = [state.pieces[j], state.pieces[i]];
+            }
+            state.selectedPieceIndex = null;
+        }
+
+        function renderBoard() {
+            elements.board.innerHTML = '';
+            state.pieces.forEach((piece, index) => {
+                const div = document.createElement('div');
+                div.classList.add('puzzle-piece');
+                div.dataset.index = index;
+                
+                const correctRow = Math.floor(piece.correctPos / state.cols);
+                const correctCol = piece.correctPos % state.cols;
+                
+                const xPercent = state.cols > 1 ? (correctCol / (state.cols - 1)) * 100 : 0;
+                const yPercent = state.rows > 1 ? (correctRow / (state.rows - 1)) * 100 : 0;
+
+                div.style.backgroundImage = `url('${state.currentImageUrl}')`;
+                div.style.backgroundSize = `${state.cols * 100}% ${state.rows * 100}%`;
+                div.style.backgroundPosition = `${xPercent}% ${yPercent}%`;
+
+                if (state.selectedPieceIndex === index) {
+                    div.classList.add('selected');
+                }
+                addInteraction(div, index);
+                elements.board.appendChild(div);
+            });
+        }
+
+        function addInteraction(element, index) {
+            element.setAttribute('draggable', true);
+
+            element.addEventListener('dragstart', (e) => {
+                state.isDragging = true;
+                e.dataTransfer.setData('text/plain', index);
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => element.style.opacity = '0.5', 0);
+            });
+
+            element.addEventListener('dragend', () => {
+                state.isDragging = false;
+                element.style.opacity = '1';
+                document.querySelectorAll('.puzzle-piece').forEach(p => p.style.transform = '');
+            });
+
+            element.addEventListener('dragover', (e) => {
+                e.preventDefault(); 
+                e.dataTransfer.dropEffect = 'move';
+                element.style.transform = 'scale(0.95)';
+            });
+
+            element.addEventListener('dragleave', () => {
+                element.style.transform = '';
+            });
+
+            element.addEventListener('drop', (e) => {
+                e.preventDefault();
+                element.style.transform = '';
+                const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                if (fromIndex !== index) swapPieces(fromIndex, index);
+            });
+
+            element.addEventListener('click', (e) => {
+                if (state.isDragging) return;
+                if (state.selectedPieceIndex === null) {
+                    state.selectedPieceIndex = index;
+                    renderBoard();
+                } else if (state.selectedPieceIndex === index) {
+                    state.selectedPieceIndex = null;
+                    renderBoard();
+                } else {
+                    swapPieces(state.selectedPieceIndex, index);
+                    state.selectedPieceIndex = null;
+                }
+            });
+        }
+
+        function swapPieces(indexA, indexB) {
+            [state.pieces[indexA], state.pieces[indexB]] = [state.pieces[indexB], state.pieces[indexA]];
+            renderBoard();
+            setTimeout(checkWin, 100);
+        }
+
+        function checkWin() {
+            const isWin = state.pieces.every((piece, index) => piece.correctPos === index);
+            if (isWin) {
+                document.querySelectorAll('.puzzle-piece').forEach(p => {
+                    p.style.border = 'none';
+                    p.classList.add('correct-flash');
+                });
+                elements.board.style.gap = '0';
+                
+                // 勝利後也可以請求 AI 給予讚美 (選擇性功能，這裡先用一般 Modal)
+                setTimeout(() => {
+                    showModal("🎉 恭喜完成！", "你成功拼出了完整的圖片！太棒了！", true, false);
+                }, 500);
+            }
+        }
+
+        // --- 工具函式 ---
+
+        function setLoading(isLoading, text = "Loading...") {
+            state.isLoading = isLoading;
+            elements.loadingOverlay.style.display = isLoading ? 'flex' : 'none';
+            elements.loadingText.textContent = text;
+            elements.board.classList.toggle('loading', isLoading);
+            
+            // 停用/啟用按鈕
+            elements.aiGenBtn.disabled = isLoading;
+            elements.aiCoachBtn.disabled = isLoading;
+        }
+
+        function showModal(title, text, isWin = false, isAI = false) {
+            elements.modalTitle.textContent = title;
+            elements.modalText.textContent = text;
+            elements.infoModal.style.display = 'flex';
+            
+            // 樣式調整
+            if (isAI) {
+                elements.modalContentBox.classList.add('ai-style');
+                elements.modalActionBtn.textContent = "好的";
+                elements.modalActionBtn.dataset.action = "close";
+            } else {
+                elements.modalContentBox.classList.remove('ai-style');
+            }
+
+            if (isWin) {
+                elements.modalActionBtn.textContent = "再玩一次";
+                elements.modalActionBtn.dataset.action = "restart";
+            } else if (!isAI) {
+                elements.modalActionBtn.textContent = "確定";
+                elements.modalActionBtn.dataset.action = "close";
+            }
+        }
+
+    </script>
+</body>
+</html>
